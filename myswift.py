@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 # =========================================================
 CONNECT_DELAY        = 5000      # jeda setelah input password -> SYSTEM CONNECTED (py: 5000)
 AFTER_CONNECT_DELAY  = 3000      # jeda setelah CONNECTED -> lanjut section (py: 3000)
-AUTO_MIN, AUTO_MAX   = 2000, 4000  # auto-enter Profile..Create Transaction (random 2-4 dtk)
+AUTO_MIN, AUTO_MAX   = 2000, 4000  # auto-enter Profile..Transaction ID (random 2-4 dtk)
 TRN_DELAY            = 3000      # jeda setelah input TRN -> TRANSACTION FOUND (py: data found 3000)
 FOUND_DELAY          = 3000      # jeda setelah TRANSACTION FOUND -> Proceed
 AUTH_DELAY           = 2000      # jeda setelah input auth -> INVALID (py: handle_code 2000)
@@ -17,9 +17,10 @@ AUTH_DELAY           = 2000      # jeda setelah input auth -> INVALID (py: handl
 #   py -> self.root.after(300000, start_download(percent+1))  (= 5 menit per 1%)
 # NOTE: 300000ms = 5 menit per 1% -> 0..100% makan waktu sangat lama.
 #       Ganti angka ini kalau mau lebih cepat (mis. 30000 = 30 dtk/1%).
-PROC_INTERVAL        = 300000
+PROC_INTERVAL        = 300000     # 5 menit per 1% (konsep download)
 
-USERPASS_LEN         = 15        # length User ID & Password disamakan
+USERID_LEN           = 7         # length User ID
+PASS_LEN             = 12        # length Password
 LABEL_WIDTH          = 25        # supaya semua titik dua ( : ) sejajar
 
 TZ = ZoneInfo("Asia/Kuala_Lumpur")
@@ -62,7 +63,7 @@ class TerminalGUI:
         self.print_line("Secure System Access")
 
         # ---- mulai: Secure System Access ----
-        self.ask_input(self.prompt("User ID"), max_length=USERPASS_LEN, mask=True, var="userid")
+        self.ask_input(self.prompt("User ID"), max_length=USERID_LEN, mask=True, var="userid")
 
     # =====================================================
     #  Helpers
@@ -126,7 +127,7 @@ class TerminalGUI:
     # =====================================================
     def dispatch(self, var, value):
         if var == "userid":
-            self.ask_input(self.prompt("Password"), max_length=USERPASS_LEN, mask=True, var="password")
+            self.ask_input(self.prompt("Password"), max_length=PASS_LEN, mask=True, var="password")
 
         elif var == "password":
             self.root.after(CONNECT_DELAY, self.show_connected)
@@ -146,14 +147,14 @@ class TerminalGUI:
         self.stamp_line("green")
         self.root.after(AFTER_CONNECT_DELAY, self.show_dashboard)
 
-    # ---- 4) Payments Operations Dashboard Monitor ----
+    # ---- 4) Payment Operations Dashboard ----
     def show_dashboard(self):
         self.text.insert("end", "\n")
-        self.print_line("Payments Operations Dashboard Monitor")
+        self.print_line("Payment Operations Dashboard")
 
-        # Profile .. Create Transaction -> input otomatis,
+        # Profile .. Transaction ID -> input otomatis,
         # tapi tetap tampil cursor "I" kedap-kedip seperti input teks.
-        steps = ["Profile", "Transaction History", "Create Transaction"]
+        steps = ["Profile", "Transaction History", "Transaction ID"]
 
         def do_step(i):
             if i < len(steps):
@@ -190,8 +191,18 @@ class TerminalGUI:
         self.text.insert("end", "\n")
         self.print_line("   TRANSACTION FOUND", "green")   # hijau
         # Message Type s/d Amount -> PUTIH (tanpa tag)
-        for lbl in ["Message Type", "Bank Name", "Swift Code", "Country", "Currency", "Amount"]:
-            self.text.insert("end", self.prompt(lbl) + "\n")   # putih
+        # NOTE: data contoh (hardcode) utk testing
+        sample = [
+            ("Message Type",   "MX pacs.008"),
+            ("Direction",      "Incoming"),
+            ("Bank Name",      "Deutsche Bank AG"),
+            ("BIC/SWIFT Code", "DEUTDEFFXXX"),
+            ("Country",        "Germany"),
+            ("Currency",       "USD"),
+            ("Amount",         "3,000,000,000"),
+        ]
+        for lbl, val in sample:
+            self.text.insert("end", self.prompt(lbl) + val + "\n")   # putih
             self.text.see("end")
         self.stamp_line()   # waktu di bawah Amount -> hijau
 
@@ -209,7 +220,7 @@ class TerminalGUI:
             self.start_processing(0)
         else:
             self.text.insert("end", "\n")
-            self.print_line("   PROCESS CANCELLED!!!!!", "red")
+            self.print_line("   PROCESS CANCELLED", "red")
             self.stamp_line("red")
 
     def start_processing(self, percent=0):
@@ -217,7 +228,7 @@ class TerminalGUI:
             self.text.insert("end", "\n   ")
             self.proc_label = tk.Label(
                 self.text,
-                text="Processing Status  ( 0% )",
+                text="Processing Status  (0%)",
                 font=("Consolas", 12),
                 fg="#FFD580",          # emas saat berjalan
                 bg="black", bd=0, highlightthickness=0, anchor="w"
@@ -226,7 +237,7 @@ class TerminalGUI:
             self.text.insert("end", "\n")
             self.text.see("end")
         else:
-            self.proc_label.config(text=f"Processing Status  ( {percent}% )")
+            self.proc_label.config(text=f"Processing Status  ({percent}%)")
             if percent == 100:
                 self.proc_label.config(fg="#3EE06E")   # hijau saat selesai
             self.text.see("end")
@@ -250,10 +261,10 @@ class TerminalGUI:
         self.auth_attempts += 1
 
         def show_result():
-            self.print_line("   INVALID", "red")
+            self.print_line("   INVALID AUTHENTICATION", "red")
             if self.auth_attempts >= self.max_auth:
                 # INVALID -> langsung TRANSACTION BLOCKED -> timestamp (semua merah, tanpa jarak)
-                self.print_line("   TRANSACTION BLOCKED!!!!!", "red")
+                self.print_line("   TRANSACTION BLOCKED", "red")
                 self.stamp_line("red")
             else:
                 self.stamp_line("red")   # waktu di bawah INVALID -> merah

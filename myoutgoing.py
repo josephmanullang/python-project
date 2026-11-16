@@ -9,14 +9,16 @@ from zoneinfo import ZoneInfo
 CONNECT_DELAY        = 5000       # jeda setelah password -> SYSTEM CONNECTED
 AFTER_CONNECT_DELAY  = 3000       # jeda setelah CONNECTED -> dashboard
 AUTO_MIN, AUTO_MAX   = 2000, 4000 # kedap-kedip tiap step dashboard (random 2-4 dtk)
-DETAILS_DELAY        = 3000       # jeda setelah input Create Transaction -> Transaction Details
+DETAILS_DELAY        = 3000       # jeda setelah input Transaction ID -> Transaction Details
 
 # Processing Status (konsep download, sama seperti myswift):
 #   300000ms = 5 menit per 1% -> 0..100% lama sekali.
 #   Ganti mis. 30000 (30 dtk/1%) atau 3000 (3 dtk/1%) kalau mau cepat.
 PROC_INTERVAL        = 300000
 
-USERPASS_LEN         = 15         # length User ID, Password, & Create Transaction disamakan
+USERID_LEN           = 7          # length User ID
+PASS_LEN             = 12         # length Password
+USERPASS_LEN         = 100        # length input Transaction History
 LABEL_WIDTH          = 28         # supaya semua titik dua ( : ) sejajar
 
 TZ = ZoneInfo("Asia/Kuala_Lumpur")
@@ -59,7 +61,7 @@ class TerminalGUI:
         self.print_line("Secure System Access")
 
         # ---- mulai: Secure System Access ----
-        self.ask_input(self.prompt("User ID"), max_length=USERPASS_LEN, mask=True, var="userid")
+        self.ask_input(self.prompt("User ID"), max_length=USERID_LEN, mask=True, var="userid")
 
     # =====================================================
     #  Helpers
@@ -146,17 +148,18 @@ class TerminalGUI:
         self.root.after(random.randint(AUTO_MIN, AUTO_MAX), finish)
 
     def activate_create_input(self):
-        """Setelah semua kedap-kedip, user input di Create Transaction (mask '*')."""
+        """Setelah semua kedap-kedip, user input di Transaction History (tampil biasa)."""
         entry = tk.Entry(self.text, font=("Consolas", 12), bg="black", fg="white",
-                         insertbackground="white", relief="flat", width=USERPASS_LEN, show="*")
-        self.text.window_create("ct_mark", window=entry)
+                         insertbackground="white", relief="flat", width=USERPASS_LEN)
+        self.text.window_create("th_mark", window=entry)
         entry.focus()
 
         def submit(value):
             value = value[:USERPASS_LEN]
             entry.destroy()
-            self.text.insert("ct_mark", "*" * len(value))
+            self.text.insert("th_mark", value)
             self.text.see("end")
+            self.message_id = value
             self.root.after(DETAILS_DELAY, self.show_transaction_details)  # jeda 3 dtk
 
         def on_enter(event=None):
@@ -174,13 +177,10 @@ class TerminalGUI:
     # =====================================================
     def dispatch(self, var, value):
         if var == "userid":
-            self.ask_input(self.prompt("Password"), max_length=USERPASS_LEN, mask=True, var="password")
+            self.ask_input(self.prompt("Password"), max_length=PASS_LEN, mask=True, var="password")
 
         elif var == "password":
             self.root.after(CONNECT_DELAY, self.show_connected)
-
-        elif var == "outgoing":
-            self.handle_outgoing(value)
 
     # ---- SYSTEM CONNECTED (hijau) + jeda lalu dashboard ----
     def show_connected(self):
@@ -188,27 +188,27 @@ class TerminalGUI:
         self.stamp_line("green")
         self.root.after(AFTER_CONNECT_DELAY, self.show_dashboard)
 
-    # ---- Payments Operations Dashboard Monitor ----
+    # ---- Payment Operations Dashboard ----
     def show_dashboard(self):
         self.text.insert("end", "\n")
-        self.print_line("Payments Operations Dashboard Monitor")
+        self.print_line("Payment Operations Dashboard")
 
         # Kedap-kedip dulu (auto) utk SEMUA step: Profile -> Transaction History
-        # -> Create Transaction -> Transaction Tracking.
-        # Baru setelah itu user input di Create Transaction.
-        steps = ["Profile", "Transaction History", "Create Transaction", "Transaction Tracking"]
+        # -> Transaction ID -> Transaction Tracking.
+        # Baru setelah itu user input di Transaction History.
+        steps = ["Profile", "Transaction History", "Transaction ID", "Transaction Tracking"]
 
         def do_step(i):
             if i < len(steps):
                 self.text.insert("end", self.prompt(steps[i]))
-                if steps[i] == "Create Transaction":
+                if steps[i] == "Transaction History":
                     # tandai posisi utk input user (dipakai setelah semua kedap-kedip)
-                    self.text.mark_set("ct_mark", "end-1c")
-                    self.text.mark_gravity("ct_mark", "left")
+                    self.text.mark_set("th_mark", "end-1c")
+                    self.text.mark_gravity("th_mark", "left")
                 self.text.see("end")
                 self.blink_cursor(lambda: do_step(i + 1))
             else:
-                # semua sudah kedap-kedip -> user input di Create Transaction
+                # semua sudah kedap-kedip -> user input di Transaction History
                 self.activate_create_input()
 
         do_step(0)
@@ -216,13 +216,12 @@ class TerminalGUI:
     # ---- Transaction Details ----
     def show_transaction_details(self):
         self.text.insert("end", "\n")              # jarak 1 line dgn Transaction Tracking
-        self.print_line("Outgoing MX pacs.008")
         self.print_line("Transaction Details")     # pepet ke kiri screen
 
         now_kl = datetime.now(TZ)
 
         # Message ID s/d Value Date
-        self.field("Message ID",   "OUT20261010005678")
+        self.field("Message ID",   self.message_id)
         self.field("Message Type", "MX pacs.008")
         self.field("Direction",    "Outgoing")
         # Status pakai Label supaya bisa berubah saat Completed
@@ -238,64 +237,22 @@ class TerminalGUI:
         self.field("Value Date",   now_kl.strftime("%d %b %Y"))   # tanggal realtime KL
 
         # Sender side
-        self.field("Senders Correspondent", "Deutsche Bank AG")
-        self.field("Bank Address Sender",   "Taunusanlage 12 60262, Frankfurt Am Main, Germany")
+        self.field("Sender's Correspondent", "Deutsche Bank AG")
+        self.field("Sender's Bank Address", "Taunusanlage 12 60262, Frankfurt Am Main, Germany")
         self.field("Account Name",           "Carlo Damanti")
-        self.field("BICFI",                  "DEUTDEFFXXX")
-        self.field("Amount",                 "3,000,000,000")
+        self.field("BIC/SWIFT Code",                  "DEUTDEFFXXX")
         self.field("Currency",               "USD")
+        self.field("Amount",                 "3,000,000,000")
         # Receiver side (nempel ke Currency, tanpa garis pemisah)
-        self.field("Receiver Correspondent", "Krung Thai Bank Public Company Limited")
-        self.field("Bank Address Receiver",  "435 Phahonyothin Rd., Anusawari Sub-District, "
+        self.field("Receiver's Correspondent", "Krung Thai Bank Public Company Limited")
+        self.field("Receiver's Bank Address", "435 Phahonyothin Rd., Anusawari Sub-District, "
                                              "Bangkhen District, Bangkok, Thailand 10220 Zipcode")
         self.field("Account Name",            "Mr.Mangkon Mangkonkaeo")
         self.field("Account Number",          "899000002518")
-        self.field("BICFI",                   "KRTHTHBK")
+        self.field("BIC/SWIFT Code",                   "KRTHTHBK")
 
-        # Outgoing Confirmation
-        self.text.insert("end", "\n")
-        self.ask_input(self.prompt("Outgoing Confirmation (Y/N)"),
-                       max_length=3, uppercase=True, var="outgoing")
-
-    # ---- Outgoing -> timestamp KL + Processing Status ----
-    def handle_outgoing(self, value):
-        if value.strip().upper().startswith("Y"):
-            self.stamp_line("green")   # tanggal & waktu (Kuala Lumpur) di bawah input
-            self.start_processing(0)
-        else:
-            self.stamp_line("green")   # tetap tampilkan waktu input
-            self.text.insert("end", "\n")
-            self.print_line("   OUTGOING CANCELLED!!!!!", "red")
-            self.stamp_line("red")
-
-    # ---- Processing Status (konsep download, seperti myswift) ----
-    def start_processing(self, percent=0):
-        if percent == 0:
-            self.text.insert("end", "\n   ")
-            self.proc_label = tk.Label(
-                self.text,
-                text="Processing Status  ( 0% )",
-                font=("Consolas", 12),
-                fg="#FFD580",          # emas saat berjalan
-                bg="black", bd=0, highlightthickness=0, anchor="w"
-            )
-            self.text.window_create("end", window=self.proc_label)
-            self.text.insert("end", "\n")
-            self.text.see("end")
-        else:
-            self.proc_label.config(text=f"Processing Status  ( {percent}% )")
-            if percent == 100:
-                self.proc_label.config(fg="#3EE06E")   # hijau saat selesai
-            self.text.see("end")
-
-        if percent < 100:
-            self.root.after(PROC_INTERVAL, lambda: self.start_processing(percent + 1))
-        else:
-            # Status berubah: In Progress -> Received at Common Account
-            if hasattr(self, "status_label") and self.status_label:
-                self.status_label.config(text="Received at Common Account")
-            self.print_line("   Completed", "green")   # pepet ke atas, tanpa space
-            self.stamp_line("green")
+        # flow berhenti di sini
+        self.status_label.config(text="Received at Common Account")
 
 
 if __name__ == "__main__":
