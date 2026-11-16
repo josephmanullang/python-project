@@ -18,7 +18,7 @@ PROC_INTERVAL        = 300000
 
 USERID_LEN           = 7          # length User ID
 PASS_LEN             = 12         # length Password
-USERPASS_LEN         = 100        # length input Transaction History
+USERPASS_LEN         = 100        # length input Transaction ID
 LABEL_WIDTH          = 28         # supaya semua titik dua ( : ) sejajar
 
 TZ = ZoneInfo("Asia/Kuala_Lumpur")
@@ -148,16 +148,16 @@ class TerminalGUI:
         self.root.after(random.randint(AUTO_MIN, AUTO_MAX), finish)
 
     def activate_create_input(self):
-        """Setelah semua kedap-kedip, user input di Transaction History (tampil biasa)."""
+        """Setelah semua kedap-kedip, user input di Transaction ID (tampil biasa)."""
         entry = tk.Entry(self.text, font=("Consolas", 12), bg="black", fg="white",
                          insertbackground="white", relief="flat", width=USERPASS_LEN)
-        self.text.window_create("th_mark", window=entry)
+        self.text.window_create("tid_mark", window=entry)
         entry.focus()
 
         def submit(value):
             value = value[:USERPASS_LEN]
             entry.destroy()
-            self.text.insert("th_mark", value)
+            self.text.insert("tid_mark", value)
             self.text.see("end")
             self.message_id = value
             self.root.after(DETAILS_DELAY, self.show_transaction_details)  # jeda 3 dtk
@@ -195,20 +195,20 @@ class TerminalGUI:
 
         # Kedap-kedip dulu (auto) utk SEMUA step: Profile -> Transaction History
         # -> Transaction ID -> Transaction Tracking.
-        # Baru setelah itu user input di Transaction History.
+        # Baru setelah itu user input di Transaction ID.
         steps = ["Profile", "Transaction History", "Transaction ID", "Transaction Tracking"]
 
         def do_step(i):
             if i < len(steps):
                 self.text.insert("end", self.prompt(steps[i]))
-                if steps[i] == "Transaction History":
+                if steps[i] == "Transaction ID":
                     # tandai posisi utk input user (dipakai setelah semua kedap-kedip)
-                    self.text.mark_set("th_mark", "end-1c")
-                    self.text.mark_gravity("th_mark", "left")
+                    self.text.mark_set("tid_mark", "end-1c")
+                    self.text.mark_gravity("tid_mark", "left")
                 self.text.see("end")
                 self.blink_cursor(lambda: do_step(i + 1))
             else:
-                # semua sudah kedap-kedip -> user input di Transaction History
+                # semua sudah kedap-kedip -> user input di Transaction ID
                 self.activate_create_input()
 
         do_step(0)
